@@ -1,16 +1,63 @@
-# Current Feature
+# Current Feature: Hive Detail — On-Demand PDF Generation
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Bullet points of what success looks like. Populated by /feature load. -->
+- Add a "Pobierz PDF" button to the hive detail page topbar (`/hive/[hiveId]`), beside the existing `PrintButton`, that generates a PDF of the hive's last inspection on-demand.
+- Button renders disabled with tooltip "Brak przeglądów do pobrania" when `currentInspection` is null.
+- Clicking shows a loading spinner ("Generowanie..."); after 5s a slow-load notice appears ("Uruchamianie serwisu PDF...").
+- New client component `components/hive/PdfButton.tsx` — uses `fetch` (not a server action, response is a binary stream), turns the response into a blob and triggers a browser download named `hivewise-inspekcja-[id].pdf`.
+- New route handler `app/api/inspections/[inspectionId]/pdf/route.ts` (POST): auth check → Upstash rate limit (per `userId`, before any DB call) → ownership check (Prisma `findFirst` with `userId` filter, IDOR guard) → monthly quota check (`UsagePeriod.pdfGenerationsUsed` vs 20 free / 100 premium) → POST to WeasyPrint microservice on Render → stream PDF bytes back with `Content-Disposition: attachment`.
+- New payload builder `lib/pdf-payload.ts` — assembles the JSON body the FastAPI microservice expects (`InspectionPayload` Pydantic shape) from an inspection + hive + apiary.
+- `PDF_SERVICE_URL` read from env (no trailing slash; handler appends `/generate-pdf`); 30s `AbortSignal.timeout` for Render cold starts, friendly 503 on timeout.
+- Increment `UsagePeriod.pdfGenerationsUsed` (upsert) only *after* a successful generation — failed requests must not count.
+- Polish error messages throughout: 401 not-logged-in, 429 rate limit (with retry seconds + `Retry-After` header), 429 quota (free tier includes upgrade prompt, `upgradeRequired: true`), 502 bad microservice response, 503 microservice unreachable.
+- Nothing stored on R2 — generation is stateless.
+- No TypeScript errors.
 
 ## Notes
 
-<!-- Additional context, constraints, or details from the spec. -->
+- Extends `context/features/hive-detail-spec.md` — all layout, chart and print decisions there remain unchanged. Spec file: `context/features/hive-detail-pdf-extension-spec.md`.
+- Route handler, not server action, because server actions can only return serializable data, not a binary stream.
+- Spec references files/utilities that may not exist yet in this repo — verify before assuming: `@/lib/auth` (repo uses `auth.ts` at root / `app/lib`), `@/lib/prisma` (repo has `app/lib/prisma.ts`), `@/lib/ratelimit` + `pdfLimiter`, `@/lib/ratelimit-helpers` + `getIp` (Upstash rate limiting — likely not yet installed/configured), `@/components/icons` (`DownloadIcon`, `LoaderIcon`), `@/types/inspection-draft` (repo has `types/inspection.ts` deriving section types from form schemas), and `../generated/prisma` types. `UsagePeriod` and `Subscription` models exist in the schema; `pdfGenerationsUsed` field confirmed present.
+- Spec code samples use `params` synchronously and `@/`-style/`src/`-style paths — this repo has no `src/`, and per AGENTS.md this is a modified Next.js: **read the relevant guide in `node_modules/next/dist/docs/` before writing route-handler / dynamic-params code.** Next 16 in this repo awaits `params`.
+- Security checklist in spec: unauth → 401 before DB; IDOR → `userId` filter in Prisma; bill-bombing → Upstash rate limit + `UsagePeriod` quota; concurrent-request quota bypass → rate limit fires before quota check; cold-start hang → `AbortSignal.timeout(30_000)`; malicious PDF content → `Content-Disposition: attachment` (never inline).
+- Out of scope: R2 storage/caching of PDFs, PDF-on-submit, PDFs for historical (non-last) inspections, retry mechanism, Render paid tier.
+- Needs `PDF_SERVICE_URL` added to `.env` and Vercel env vars. The Render WeasyPrint microservice itself is assumed to exist (its spec is referenced but not included).
+
+## Implementation log
+
+Branch `feat/hive-detail-pdf`. All gates green: `tsc --noEmit`, `eslint`, `prettier --check`, `vitest run` (535 tests, unchanged), `next build` (route `/api/inspections/[inspectionId]/pdf` registered dynamic).
+
+**Decisions (user-confirmed via AskUserQuestion):**
+
+1. **Payload targets the *existing* live microservice contract, not the spec's flat shape.** The deployed Render service is already driven by `app/components/inspection/payload.ts` (`buildInspectionPayload`), which emits `{ meta, weather, queen, brood, colony, comb, actions, health, notes }` and "rejects unknown keys". The spec's flat `{ apiary_name, hive_label, honey_kg, … }` shape would need the microservice redeployed first. `app/lib/pdf-payload.ts` (`buildPdfPayload`) reshapes a persisted `Inspection` row into the working contract: `queen`/`brood`/`colony` pass through unchanged (same fields `buildInspectionRecord` wrote), `comb` gains `schema_version` from the row's `combSchemaVersion` column, `health.health_other`→`other`, `actions.other`/`notes` run through `emptyToNull`. `weather` is always `null` (never persisted). `meta.beekeeper_name` from `session.user.name` → `apiary.json` fallback; `veterinary_number` from `apiary.json`; `hive_number` = `hive.label`; `inspection_number` = count of hive inspections with `inspectedAt <= this one`; `inspection_date` from `inspectedAt`.
+2. **`PDF_SERVICE_URL` kept as the full endpoint** (repo convention, `.env.example` already includes `/generate-pdf`) — used verbatim, not suffixed, matching the existing `/api/generate-pdf` proxy. Spec's "append `/generate-pdf`" not followed.
+
+**Reused existing infra** rather than building spec's: `pdfLimiter` (`rl:pdf`, 20/1h, keyed by `userId`) + `checkRateLimit` / `formatRetryAfter` / `rateLimitedResponse` from `app/lib/ratelimit*.ts`. No new env var, no new package.
+
+**New / changed files:**
+
+- `app/lib/pdf-payload.ts` — `buildPdfPayload(inspection, { beekeeperName, inspectionNumber })` + `InspectionForPdf` payload type. New.
+- `app/api/inspections/[inspectionId]/pdf/route.ts` — POST handler. Guard order auth → rate limit → `PDF_SERVICE_URL` presence → ownership (`Inspection.userId` filter) → monthly quota (`UsagePeriod.pdfGenerationsUsed` vs 20 free / 100 premium, `periodStart` = 1st of month UTC) → microservice `fetch` with `AbortSignal.timeout(30_000)` → `usagePeriod.upsert` increment (only on success) → stream body with `Content-Disposition: attachment`. Errors: 401/404/429 (rate)/429 (quota, `upgradeRequired` for free)/502 (bad upstream)/503 (unreachable or unconfigured), all Polish. New.
+- `app/components/hive/PdfButton.tsx` — client component; `fetch` → blob → anchor download named `hivewise-inspekcja-[id8].pdf`; `loading` spinner, 5s `slowLoad` notice, inline error `<p>`; disabled+tooltip when `inspectionId` null. Styling mirrors `PrintButton`. New.
+- `app/components/dashboard/icons.tsx` — added `DownloadIcon`, `LoaderIcon` (spec imported them from a non-existent `@/components/icons`).
+- `app/(dashboard)/hive/[hiveId]/page.tsx` — topbar `actions` now wraps `<PrintButton />` + `<PdfButton inspectionId={current?.id ?? null} disabled={!current} />` in a flex row.
+
+**Bug found on first click (500 → fixed):** the persisted `Inspection` JSON does not match `db-payload.ts`'s declared types — every existing inspection (5 in dev, prod per notes) was written by `scripts/seed-demo.ts` to a **pre-refactor schema**. Divergences `buildPdfPayload` now normalizes:
+
+- `health.other` / `actions.other` stored as `null` (seed) vs `health.health_other` string (current form) → `emptyToNull` made null/undefined-safe; reads `health.other ?? health.health_other`.
+- `brood_pattern` stored as `"solid"` / `"spotty"` strings (seed) vs `1–5` int (current form + microservice) → `normalizeBroodPattern` maps `solid→5`, `spotty→2` per the app's own `PATTERN_WORDS` in `brood.voice.ts`, else passes the number, floor 1.
+- `queen_cells_count` stored as `null` (seed) vs int `0` default (current form) → `normalizeQueenCellsCount` coerces non-number → 0.
+
+Verified end-to-end: `buildPdfPayload` output for **all 5 seeded inspections** POSTed to the live `PDF_SERVICE_URL` → HTTP 200, `application/pdf`, 24–26 KB, `%PDF-` magic bytes. The live microservice's Pydantic model accepted every other field of the shape unchanged (the 422 before the fix listed only those two).
+
+**Follow-up for the user, not blocking:** `scripts/seed-demo.ts` (and `seed-demo.sql`) write stale-shaped inspection JSON — regenerate them against the current step schemas so future seeds don't need the compat shims. The normalizers in `buildPdfPayload` are defensive and pass current-schema rows through untouched.
+
+**Not yet done:** `/feature test` (payload builder incl. the normalizers + quota/period math are the testable units), manual browser verification of the button UI (spinner, 5s notice, quota 429, disabled state), `/feature review`, `/feature explain`.
 
 ## History
 
