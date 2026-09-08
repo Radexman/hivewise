@@ -98,12 +98,12 @@ export function HiveCard({ hiveId, label, queenStatus, strength, lastInspection,
 				{/* Stacked on phones: side by side inside a half-width card leaves each
 				    button too narrow to hit reliably. */}
 				<div className='flex flex-col gap-2 lg:flex-row lg:gap-1.5'>
-					<button
-						type='button'
+					<Link
+						href={`/hive/${hiveId}`}
 						className={`${BTN_BASE} ${BTN_GHOST}`}
 					>
 						Szczegóły
-					</button>
+					</Link>
 					<Link
 						href={`/inspect/${hiveId}`}
 						className={`${BTN_BASE} ${BTN_PRIMARY}`}

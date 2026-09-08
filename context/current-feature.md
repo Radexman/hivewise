@@ -1,16 +1,43 @@
-# Current Feature
+# Current Feature: Hive Detail Page — Summary, Charts & Print
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Bullet points of what success looks like. Populated by /feature load. -->
+- New route `app/(dashboard)/hive/[hiveId]/page.tsx` at URL `/hive/[hiveId]` — server component, one Prisma query fetching hive + apiary + currentInspection + inspections (ownership enforced via `apiary: { userId: session.user.id }`); unauthenticated → `/login`, other user's hive → 404.
+- `HiveCard.tsx` "Szczegóły" button becomes a `next/link` to `/hive/${hive.id}`.
+- Free vs Premium data scope: read `Subscription.tier`; Free users get last 3 months of inspections (chart + history), Premium gets full history. Pass `isPremium` to the view.
+- Hero section: hive label, apiary name, hive-type label, last inspection date, and a status pill from `deriveHiveStatus(currentInspection)`.
+- 4 stat cards (queen status, strength dots, brood summary, honey kg) derived from `currentInspection`, all showing "—" when there is no inspection.
+- Recharts `LineChart` honey trend (client component): amber line (`var(--accent-warm)`), Polish-formatted dates and tooltip (kg), empty state for <2 data points, limit notice for Free users. Install `recharts` if absent.
+- Inspection history list, newest first: date, queen badge, health badge (when issues observed), honey kg, notes indicator. Empty state + Free-tier upgrade banner.
+- Print: `PrintButton` client component calling `window.print()`; `@media print` rules in `globals.css` hiding chrome, resetting dark theme to white, showing a `.print-header` with apiary/hive/date; Recharts SVG must render in print preview.
+- Reuse `QueenData`, `ColonyData`, `BroodData`, `HealthData` from `types/inspection-draft.ts` — no new types.
+- No TypeScript or Prisma type errors.
 
 ## Notes
 
-<!-- Additional context, constraints, or details from the spec. -->
+- Spec file: `context/features/hive-detail-spec.md`.
+- `honeyKg` is a scalar column (derived at inspection submit) — no JSON parsing for the chart. JSON columns are only for human-readable history summaries.
+- Spec code samples use `src/`-prefixed paths, `@/lib/auth`, `@/lib/prisma`, `components/`, and `redirect('/login')`. This repo has no `src/`, uses `app/lib/*`, `app/components/*`, and the auth pages live at `/sign-in` — reconcile against actual repo conventions when implementing (see History decisions on repeated spec/repo path mismatches).
+- Spec references `hive.currentInspection` relation, `hive.label`, `hive.hiveType`, and an `inspection.brood` JSON column — verify these against `prisma/schema.prisma` and the real inspection type before coding; earlier specs had `ColonyData` field/range errors caught only by deriving types from the form schemas.
+- `deriveHiveStatus` / status-pill logic likely overlaps existing `app/lib/dashboard.ts` and `app/components/dashboard/status.ts` — reuse rather than reimplement.
+- Follows "This is NOT the Next.js you know" — check `node_modules/next/dist/docs/` for route params / server component conventions (params may be async) before writing the page.
+- Out of scope: PDF microservice, R2 storage, inspection edit/delete, inspection detail modal, AI insights, a second chart.
+
+## Acceptance criteria
+
+- [ ] "Szczegóły" button on HiveCard navigates to `/hive/[hiveId]`
+- [ ] Another user's hive returns 404; unauthenticated redirects to sign-in
+- [ ] Hero shows label, apiary name, type, last inspection date; status pill reflects derived status
+- [ ] 4 stat cards show queen status, strength dots, brood summary, honey kg; all "—" when no inspections
+- [ ] Honey chart renders with ≥2 honeyKg points, amber line, Polish tooltip; empty state under 2 points
+- [ ] Free users: last 3 months only in chart + history, upgrade prompt shown; Premium: full history, no prompt
+- [ ] History list sorted newest first with date, queen badge, health badge (if issues), honey kg
+- [ ] Print button triggers `window.print()`; print layout hides chrome, whitens background, shows print header; Recharts SVG renders in print preview
+- [ ] No TypeScript / Prisma type errors
 
 ## History
 
