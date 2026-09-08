@@ -1,43 +1,16 @@
-# Current Feature: Hive Detail Page — Summary, Charts & Print
+# Current Feature
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- New route `app/(dashboard)/hive/[hiveId]/page.tsx` at URL `/hive/[hiveId]` — server component, one Prisma query fetching hive + apiary + currentInspection + inspections (ownership enforced via `apiary: { userId: session.user.id }`); unauthenticated → `/login`, other user's hive → 404.
-- `HiveCard.tsx` "Szczegóły" button becomes a `next/link` to `/hive/${hive.id}`.
-- Free vs Premium data scope: read `Subscription.tier`; Free users get last 3 months of inspections (chart + history), Premium gets full history. Pass `isPremium` to the view.
-- Hero section: hive label, apiary name, hive-type label, last inspection date, and a status pill from `deriveHiveStatus(currentInspection)`.
-- 4 stat cards (queen status, strength dots, brood summary, honey kg) derived from `currentInspection`, all showing "—" when there is no inspection.
-- Recharts `LineChart` honey trend (client component): amber line (`var(--accent-warm)`), Polish-formatted dates and tooltip (kg), empty state for <2 data points, limit notice for Free users. Install `recharts` if absent.
-- Inspection history list, newest first: date, queen badge, health badge (when issues observed), honey kg, notes indicator. Empty state + Free-tier upgrade banner.
-- Print: `PrintButton` client component calling `window.print()`; `@media print` rules in `globals.css` hiding chrome, resetting dark theme to white, showing a `.print-header` with apiary/hive/date; Recharts SVG must render in print preview.
-- Reuse `QueenData`, `ColonyData`, `BroodData`, `HealthData` from `types/inspection-draft.ts` — no new types.
-- No TypeScript or Prisma type errors.
+<!-- Bullet points of what success looks like. Populated by /feature load. -->
 
 ## Notes
 
-- Spec file: `context/features/hive-detail-spec.md`.
-- `honeyKg` is a scalar column (derived at inspection submit) — no JSON parsing for the chart. JSON columns are only for human-readable history summaries.
-- Spec code samples use `src/`-prefixed paths, `@/lib/auth`, `@/lib/prisma`, `components/`, and `redirect('/login')`. This repo has no `src/`, uses `app/lib/*`, `app/components/*`, and the auth pages live at `/sign-in` — reconcile against actual repo conventions when implementing (see History decisions on repeated spec/repo path mismatches).
-- Spec references `hive.currentInspection` relation, `hive.label`, `hive.hiveType`, and an `inspection.brood` JSON column — verify these against `prisma/schema.prisma` and the real inspection type before coding; earlier specs had `ColonyData` field/range errors caught only by deriving types from the form schemas.
-- `deriveHiveStatus` / status-pill logic likely overlaps existing `app/lib/dashboard.ts` and `app/components/dashboard/status.ts` — reuse rather than reimplement.
-- Follows "This is NOT the Next.js you know" — check `node_modules/next/dist/docs/` for route params / server component conventions (params may be async) before writing the page.
-- Out of scope: PDF microservice, R2 storage, inspection edit/delete, inspection detail modal, AI insights, a second chart.
-
-## Acceptance criteria
-
-- [ ] "Szczegóły" button on HiveCard navigates to `/hive/[hiveId]`
-- [ ] Another user's hive returns 404; unauthenticated redirects to sign-in
-- [ ] Hero shows label, apiary name, type, last inspection date; status pill reflects derived status
-- [ ] 4 stat cards show queen status, strength dots, brood summary, honey kg; all "—" when no inspections
-- [ ] Honey chart renders with ≥2 honeyKg points, amber line, Polish tooltip; empty state under 2 points
-- [ ] Free users: last 3 months only in chart + history, upgrade prompt shown; Premium: full history, no prompt
-- [ ] History list sorted newest first with date, queen badge, health badge (if issues), honey kg
-- [ ] Print button triggers `window.print()`; print layout hides chrome, whitens background, shows print header; Recharts SVG renders in print preview
-- [ ] No TypeScript / Prisma type errors
+<!-- Additional context, constraints, or details from the spec. -->
 
 ## History
 
@@ -553,3 +526,32 @@ The "Przegląd" button on each dashboard hive card now opens `/inspect/[hiveId]`
 **Verified:** `tsc --noEmit`, `eslint`, `prettier --check`, `vitest run` (535 tests, 30 files — up from 508) and `next build` all green; `/inspect/[hiveId]` builds as `ƒ`. The three new suites cover the draft lifecycle (TTL boundary, malformed/invalid entries, genitive age strings), the `FormValues` → columns mapping (section pass-through, notes trim, frame renumber, honey/sufficiency/condition derivation), and the initial-values priority order.
 
 **Left open:** **No browser verification.** Everything above is the automated suite and a production build — the flow has not been walked against the Neon dev branch: the ownership 404, the resume banner, the per-field badges clearing on edit, the transactional write and the dashboard toast are all unexercised by a real click. That is the first thing `/feature review` should do, ideally with a fresh inspection created through the new flow so prefill is testing this feature's own write shape rather than the gitignored seed script's. **The "Nr przeglądu" field is vestigial on the save path** — there is no such column, so it feeds only the (unused) PDF meta; it is still rendered and editable. **The generic `/inspection` wizard still uses hardcoded `BEEHIVES`** and posts to the PDF service without persisting — untouched by decision, so there are now two inspection entry points with different backends. **No rate limiting on `submitInspectionAction`** — an authenticated user can create inspection rows without bound; the spec named a limiter it never called. **`_count.inspections` adds one aggregate per page load**, fine at this size. **Prefill from a pre-existing (seed-script) inspection is unverified** — those rows may not match `fullSchema`, in which case the prefilled form would flag errors on first navigation to the affected step; the submit `safeParse` still guards the write.
+
+### Hive Detail Page — Summary, Charts & Print — completed 2026-09-08
+
+`/hive/[hiveId]`, reached from the "Szczegóły" button on each dashboard hive card: current state from the last inspection, a Recharts honey-trend line, the full inspection history, and a browser-print report. Merged to `main` as `93848d2` (feature commit `46b3f8f`).
+
+**Delivered**
+
+- `app/(dashboard)/hive/[hiveId]/page.tsx` — server component. `auth()` + `prisma.hive.findFirst({ where: { id, apiary: { userId } } })`, so an unknown id and another user's hive fall through to the same `notFound()`; signed-out redirects to `/sign-in`. One query pulls `apiary` (name/location), the full `currentInspection`, and the `inspections` history; a second reads `Subscription.tier`.
+- `app/lib/hive-detail.ts` — `HIVE_TYPE_LABEL`, `deriveQueenStat`, `deriveBroodSummary`, `deriveHoneyLabel`, `formatChartDate`, `deriveHistoryQueenBadge`, `healthHasIssues`, `FREE_HISTORY_WINDOW_DAYS` / `freeHistoryCutoff`. Pure functions, `now` injected, mirroring `app/lib/dashboard.ts`; reuses that module's `deriveHiveStatus` / `deriveStrength` / `formatInspectionDate`.
+- `app/components/hive/` — `HoneyChart` (client, Recharts v3, amber line, Polish axis + tooltip, `<2`-point empty states, Free limit notice), `PrintButton` (client, `window.print()`), `StatusPill`, `StatCard`, `HistoryList` (newest-first, queen + health badges, honey, notes marker, Free upgrade banner).
+- `app/components/dashboard/icons.tsx` — `ChevronLeftIcon`, `PrinterIcon`. `HiveCard.tsx` — "Szczegóły" is now `<Link href={/hive/${hiveId}}>`. `Topbar.tsx` — `TopbarShell.title` widened to `ReactNode` so the back link keeps the shared bar (and its mobile sign-out). `proxy.ts` — `/hive/:path*` added to the matcher. `globals.css` — a `.print-header` (screen-hidden) plus an `@media print` block.
+- `recharts@3.10.1` and `react-is@19.2.8` added to dependencies.
+
+**No migration.** Every column read already existed.
+
+**Decisions worth remembering**
+
+- **The spec's JSON shapes were wrong and the step schemas won.** It assumed `brood` as four booleans (`brood_eggs` …) — the column is `brood_types: ('eggs'|'open'|'capped'|'drone')[]` with a separate `brood_pattern`. It read `health.issues_observed` — the field is `condition_observed`, and `healthHasIssues` also checks a non-empty `conditions[]`. It matched `queen_cells` against two values — the enum has four (`none|emergency|swarm|supersedure`). Strength is 0–20, so `deriveStrength` from `dashboard.ts` is reused rather than the spec's `frames_covered / 2`. `types/inspection.ts` (not the spec's `types/inspection-draft.ts`) is the type source.
+- **Spec paths were all wrong for this repo** — `src/`, `@/lib/auth`, `@/lib/prisma`, root `components/`, `redirect('/login')`. Actual: no `src/`, `@/auth`, `@/app/lib/prisma`, `@/app/components/*`, `/sign-in`. Same reconciliation every feature in this log has had to make.
+- **`params` is a `Promise<{ hiveId: string }>`.** Next 16, confirmed against `node_modules/next/dist/docs` and matching `app/inspect/[hiveId]/page.tsx`. The spec's synchronous `params` would not compile.
+- **The route sits *inside* `(dashboard)`, unlike `/inspect` and `/inspection`.** Those are outside because their voice panel claims the bottom 46dvh where the phone tab bar sits. The detail page is ordinary scrolling content and wants the sidebar shell + the layout's `auth()` / email-verification gates, so it stays in the group. `proxy.ts` still lists it for the optimistic pre-check.
+- **`TopbarShell.title` became `ReactNode`, not a new bespoke header.** A page that rolls its own bar silently loses sign-out on mobile (recorded in Auth Phase 3). The prop widening is backward compatible — a `string` still gets the truncating span; a node renders as given.
+- **The chart gates on `useSyncExternalStore`, not a mount effect.** `react-hooks/set-state-in-effect` rejects the `useState(false)` + `useEffect(setState(true))` shape (same lesson as the Inspection Flow draft read). Server snapshot `false`, client `true` — first paint is a fixed-height placeholder, so no hydration mismatch and no Recharts "width(0) height(0)" warning. `isAnimationActive={false}` so the line is fully drawn in a print snapshot.
+- **Print repaints by overriding the theme tokens, not by restyling every component.** `@theme inline` maps every colour utility to `var(--<token>)`, so an `@media print { :root { --surface: #fff; --foreground: #111827; … } }` block turns the whole dark page into a light document; the honey line keeps a darker amber for paper contrast. Nav chrome is hidden by element (`aside`, `header`, `nav`) since those are real semantic tags. `main` gets `overflow: visible` so the report is not clipped to one viewport.
+- **`isPremium = subscription?.tier === 'PREMIUM'`** — no subscription row reads as Free (a `/api/auth/register` account has none), matching the dashboard layout. The 3-month window is applied in the Prisma `where`, so a Free account never over-fetches.
+
+**Verified** against the Neon **development** branch in the browser (signed in as the seeded `demo@hivewise.app`, Premium): Ul 1 rendered the hero, four populated stat cards (`Widziana` / 4 dots / `jaja + otwarty + kryty` / `~5,6 kg`), a two-point amber trend line with a Polish tooltip, and a newest-first history; Ul 5 (never inspected) rendered `—` across all four cards, the muted "Brak przeglądów" pill, and both empty states. Print emulation confirmed `aside` / `header` / `nav` all `display: none`, `.print-header` shown, `body` white, `--foreground` `#111827`, and the chart SVG intact. No console errors. `tsc --noEmit`, `eslint`, `prettier --check`, `vitest run` (535 tests) and `next build` all green; `/hive/[hiveId]` builds as `ƒ`.
+
+**Left open:** **No unit tests** — `/feature test` was skipped, so `app/lib/hive-detail.ts` (the brood ordering, the Polish honey formatter, the severity-ordered queen badge, the Free cutoff) has no coverage despite being the most testable code here. **The Free-tier path was verified by reading only** — the demo account is Premium and no Free account was created, so the `chart-limit-notice` / `history-limit-banner` render and the 3-month query cutoff are unexercised by a real request. **`/settings/billing` does not exist** — both upgrade links point at it and will 404, like `/analytics` and `/settings` from the nav. **The status pill still shows on the printed report** — the spec didn't say to hide it and it reads fine on white, but it's dark-theme tinted (`bg-accent/12`). **Second query per load** for the subscription tier, alongside the hive query — same minor duplication the dashboard layout already carries. **No `generateMetadata`** — the tab title is a static "Szczegóły ula · Hivewise" rather than the hive label.
