@@ -1,34 +1,16 @@
-# Current Feature: Inspection Flow — Hive → Form → Database
+# Current Feature
 
 ## Status
 
-In Progress
+Not Started
 
 ## Goals
 
-- "Przegląd" button on `HiveCard` becomes a `<Link>` to `/inspect/[hiveId]` (no `onClick`).
-- New route `app/(dashboard)/inspect/[hiveId]/page.tsx` — server component: auth guard (redirect `/login` when unauthenticated), ownership check via `apiary.userId`, `notFound()` for missing **or** unauthorized hive (don't leak existence). Loads hive + `currentInspection` for prefill.
-- 7-step client inspection form (`Kolonia`, `Matka`, `Czerw`, `Plastry`, `Zdrowie`, `Działania`, `Podsumowanie`) with `N / 7` progress indicator + thin top progress line, no step labels. "Dalej" saves step data to draft then advances; "Wstecz" goes back without clearing.
-- `InspectionDraft` type in `types/inspection-draft.ts` covering all 7 steps, matching the Prisma `Inspection` JSON column shapes so submit is a pass-through.
-- localStorage draft system, key scoped per `hiveId` (`hivewise:draft:${hiveId}`): save on every step advance, auto-discard drafts older than 24h, fail silently when localStorage is unavailable.
-- Draft resume banner when a valid draft exists on mount: "Wznów" restores draft and jumps to last completed step; "Zacznij od nowa" clears draft and resets to step 1 with prefill values.
-- Prefill from `hive.currentInspection` when present, draft taking priority over prefill; prefilled values visually marked "z poprzedniego przeglądu". `notes` never prefilled.
-- Step 7 shows a full summary of all entered data + notes field + submit button.
-- `submitInspectionAction(hiveId, draft)` server action: re-check auth + ownership; validate required sections (`queen`, `colony`, `brood`, `comb`); validate every comb frame sums to exactly 10 (error names the offending frame); derive `honeyKg` + `honeySufficiency`; create `Inspection` and update `Hive.currentInspectionId` in one `$transaction`; `redirect('/dashboard?inspected=' + hiveId)`. Errors return `{ error }` and stay on step 7.
-- Draft cleared client-side after the successful redirect.
-- `/dashboard` reads the `inspected` query param and shows success feedback (toast / inline confirmation) for that hive.
+<!-- Bullet points of what success looks like. Populated by /feature load. -->
 
 ## Notes
 
-- **Read `node_modules/next/dist/docs/` before writing the route or the server action.** This Next version has breaking changes vs. training data. In particular the spec's `params: { hiveId: string }` is likely wrong — `params` may be a `Promise` here; verify. Heed deprecation notices.
-- **Path drift in the spec:** it uses `src/`-prefixed paths, a root `components/` dir, and imports `@/lib/auth` / `@/lib/prisma`. This repo has **no `src/`** — components live under `app/components/`, Prisma client is `app/lib/prisma.ts`, auth is `auth.ts` at repo root. Match existing import conventions, not the spec's.
-- **`colony` shape conflict:** this spec puts `honey_stores` / `honey_kg` / `frames_covered` on `draft.colony`, but the Dashboard Spec 2 History note records that `colony` carries **no** `honey_stores` / `honey_kg` (those are the derived scalar columns `honeyKg` / `honeySufficiency`) and that `frames_covered` validates 0–20, not 0–10. Reconcile against `types/inspection.ts` and the form schema (the authority on what reaches each column) before implementing — don't copy the spec's interface verbatim.
-- **Out of scope (do not build):** PDF generation (`PdfGenerationJob` flow), voice input for the comb section (`useVoiceFrame`), per-hive inspection history view, editing a submitted inspection, deleting an inspection.
-- Spec imports `loginLimiter` from `@/lib/ratelimit` but never actually calls it in submit — no rate limiting is wired on this action per the spec.
-- `combCondition: 'GOOD'` is hardcoded for now (derive from comb data in a follow-up spec); `combSchemaVersion: 2`.
-- `Hive.currentInspectionId` is `onDelete: SetNull` and forms a two-table FK cycle with `Inspection.hive` — already handled by the schema.
-- After any `schema.prisma` / `prisma generate` change, restart the dev server (recurring `@theme` / `'use server'` / Turbopack staleness lesson from History). Same for newly added server-action modules.
-- `Dodaj ul` / `Nowy przegląd` on the dashboard remain inert; `Szczegóły` stays inert. Only the `HiveCard` "Przegląd" button is wired here.
+<!-- Additional context, constraints, or details from the spec. -->
 
 ## History
 
@@ -512,3 +494,35 @@ Upstash sliding-window limiters on every auth entry point, plus the two openings
 **Verified** `tsc --noEmit`, `eslint .`, `vitest run` (508 tests, 27 files — up from 476) and `next build` all green. Routing and the auth gate were smoke-tested against `next start` with a minted session cookie: `/` anonymous → `/sign-in`, `/` signed in → `/dashboard`, `/inspection` anonymous → `/sign-in?callbackUrl=…`, `/inspection` signed in → 200, `POST /api/generate-pdf` anonymous → 401. Note for anyone repeating that: `next start` needs `AUTH_TRUST_HOST=true` or Auth.js rejects localhost as an untrusted host and every session reads as anonymous. `next dev` does not.
 
 **Left open:** **`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are not set in Vercel**, so production logs a startup warning and enforces nothing until they are — the one step that makes this feature real. **The R2 storage half of the spec was not built**: private bucket, signed URLs, ownership checks and the monthly `UsagePeriod` quota all depend on persisted inspections, and nothing writes `Inspection`, `PdfGenerationJob` or `UsagePeriod` yet — the PDF flow still posts a form-built payload with no `inspectionId` anywhere. The spec stays at `context/features/rate-limiting-spec.md` for that pass. **No limiter has been exercised against a real Redis** — the suite mocks Upstash, so the windows themselves are unverified end to end. **`/api/account/change-password` is still unlimited**, judged acceptable because it is session-gated and only reaches the caller's own account. **`/analytics` and `/settings` in `NAV_ITEMS` remain dead links**, pre-existing and untouched.
+
+### Inspection Flow — Hive → Form → Database — completed 2026-09-08
+
+The "Przegląd" button on each dashboard hive card now opens `/inspect/[hiveId]` — the existing 7-step inspection form, scoped to one real hive, drafting to localStorage and writing an `Inspection` row on submit. This is the first thing in the app that persists an inspection. Merged to `main` as `c9a3624` (feature commit `3a10e41`).
+
+**Delivered**
+
+- `app/inspect/[hiveId]/page.tsx` — server component: `await params`, session guard → `/sign-in`, and a `findFirst` filtered on `apiary: { userId }` that is the ownership check; unknown id and another user's hive both fall through to one `notFound()`. Loads `currentInspection`'s six JSON columns for prefill and `_count.inspections` for the default review number.
+- `app/components/inspection/HiveInspection.tsx` — client half: resolves the saved draft, shows the resume prompt, then renders `InspectionForm` wired to the save action. `app/lib/use-saved-draft.ts` — `useSyncExternalStore` hook that reads the draft on mount with no hydration mismatch and no set-state-in-effect.
+- `app/lib/inspection-draft.ts` (+13 tests) — `saveDraft` / `loadDraft` / `clearDraft` / `formatDraftAge`, key `hivewise:draft:<hiveId>`, 24h TTL, every access wrapped. `types/inspection-draft.ts` — `{ values: Partial<FormValues>; savedStep; savedAt }`.
+- `app/components/inspection/prefill-values.ts` (+7 tests) — `buildInitialValues` (draft > last inspection > defaults) and `prefilledKeys`. `prefill.tsx` — a context + `usePrefilled(name)` + `PrefillNote`, the per-field "· z poprzedniego przeglądu" badge.
+- `app/components/inspection/db-payload.ts` (+8 tests) — `buildInspectionRecord(FormValues)`: the six section objects stored as-is, plus `honeyKg` / `honeySufficiency` / `combCondition` derived through the existing `deriveComb()` with lowercase→enum maps. `submit-inspection.ts` — `'use server'` action: re-runs auth + ownership, `fullSchema.safeParse`, `$transaction` (create + `Hive.currentInspectionId`), `redirect('/dashboard?inspected=…')`.
+- `InspectionForm.tsx` — additive optional props (`hiveLabel`, `backLabel`, `initialValues`, `initialStep`, `prefilledFields`, `persistKey`, `onSave`). Draft is checkpointed in `onStepChange`; the summary button becomes "Zapisz przegląd" when `onSave` is set; the prefill mark for a field is dropped in the existing `methods.subscribe` when it is edited.
+- `fields.tsx` — all ten field components consult `usePrefilled` and dim + badge until touched. `StepSummary.tsx` — `mode='save'` drops the PDF copy and the weather card and shows the hive label. `HiveCard.tsx` — "Przegląd" is now `<Link href={/inspect/${hiveId}}>`. `dashboard/page.tsx` — awaits `searchParams`, renders `InspectionSavedToast` (clears the draft, strips `?inspected=` only after it closes). `proxy.ts` — `/inspect/:path*` added to the matcher.
+
+**No migration.** Every `Inspection` column this writes has existed since `20260828141044_init`.
+
+**Decisions worth remembering**
+
+- **The spec was substantially stale and the codebase won every conflict.** It predates the built form: it describes a section-nested `InspectionDraft`, a "every comb frame sums to exactly 10" submit rule, `honey_stores` on `colony`, and a three-value sufficiency enum. The real form (`schema.ts`) is one flat object; comb frames are tenths with `brood + honey + pollen ≤ 10` and a separate empty/foundation remainder; `colony` carries no honey fields (a `types/inspection.ts` comment already said so); `HoneySufficiency` has four members. The draft type is therefore flat-plus-meta and hands straight to `reset()`, and validation is one `fullSchema.safeParse` rather than the spec's hand-rolled section checks.
+- **The route sits outside `(dashboard)`, where the spec put it inside.** Same reason `/inspection` is outside, recorded in the Rate Limiting entry: the voice panel claims 46dvh at the bottom of the viewport and the dashboard shell puts a fixed tab bar there on phones. `proxy.ts` still guards it, and the page re-checks with `auth()`.
+- **`params` is a `Promise`.** Next 16, confirmed against `node_modules/next/dist/docs`. The spec's synchronous `params: { hiveId: string }` would not compile.
+- **The draft is read with `useSyncExternalStore`, not an effect.** `react-hooks/set-state-in-effect` rejects the obvious "load in `useEffect`, `setState`" shape, and a `useMemo(() => loadDraft(), [])` read (the house pattern in `useSpeechIO`) would hydrate `resume-banner` over a server-rendered `form`. The store hook's server snapshot is `null`, so the server and first client paint agree; the real draft arrives after hydration. `getSnapshot` is cached against the raw localStorage string or it loops.
+- **`InspectionForm` was extended, not forked.** ~900 lines of stepper / voice / comb logic; every new behaviour is gated on a new optional prop being present, so the generic `/inspection` wizard and its 7-test `InspectionForm.test.tsx` still pass untouched. The summary's PDF path (`downloadPdf`) is still there — `onSave` just replaces the button's handler and label.
+- **Scalar columns are derived through `deriveComb()`, the function the summary already previews.** One source for the honey number the beekeeper saw and the honey number stored. The lowercase domain values (`sufficient`, `good`) are mapped to the Prisma enums (`SUFFICIENT`, `GOOD`) in `db-payload.ts`.
+- **`combCondition` is derived now, not hardcoded `'GOOD'`.** The load note carried the spec's placeholder forward; `deriveComb` already computes it from the worst frame wear, so there was no reason to store a lie.
+- **The toast clears the draft and strips `?inspected=` — but strips it only after it has closed.** `router.replace('/dashboard')` re-renders the server component, which drops `<InspectionSavedToast>` from the tree; doing it on mount would cut the toast to a single frame.
+- **Per-field prefill marking covers the six schema-driven steps, not comb.** `StepComb` is a custom frame grid, not `fields.tsx` inputs; its values are still prefilled, just not individually badged. `prefilledKeys` still lists `frames` / `slots` etc., but nothing reads `usePrefilled` for them, so those marks are inert.
+
+**Verified:** `tsc --noEmit`, `eslint`, `prettier --check`, `vitest run` (535 tests, 30 files — up from 508) and `next build` all green; `/inspect/[hiveId]` builds as `ƒ`. The three new suites cover the draft lifecycle (TTL boundary, malformed/invalid entries, genitive age strings), the `FormValues` → columns mapping (section pass-through, notes trim, frame renumber, honey/sufficiency/condition derivation), and the initial-values priority order.
+
+**Left open:** **No browser verification.** Everything above is the automated suite and a production build — the flow has not been walked against the Neon dev branch: the ownership 404, the resume banner, the per-field badges clearing on edit, the transactional write and the dashboard toast are all unexercised by a real click. That is the first thing `/feature review` should do, ideally with a fresh inspection created through the new flow so prefill is testing this feature's own write shape rather than the gitignored seed script's. **The "Nr przeglądu" field is vestigial on the save path** — there is no such column, so it feeds only the (unused) PDF meta; it is still rendered and editable. **The generic `/inspection` wizard still uses hardcoded `BEEHIVES`** and posts to the PDF service without persisting — untouched by decision, so there are now two inspection entry points with different backends. **No rate limiting on `submitInspectionAction`** — an authenticated user can create inspection rows without bound; the spec named a limiter it never called. **`_count.inspections` adds one aggregate per page load**, fine at this size. **Prefill from a pre-existing (seed-script) inspection is unverified** — those rows may not match `fullSchema`, in which case the prefilled form would flag errors on first navigation to the affected step; the submit `safeParse` still guards the write.
