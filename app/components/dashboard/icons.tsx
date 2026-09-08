@@ -128,6 +128,40 @@ export function SignOutIcon({ className }: { className?: string }) {
 	);
 }
 
+/** Left chevron — the "back to dashboard" link in the hive detail topbar. */
+export function ChevronLeftIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			aria-hidden='true'
+			className={className}
+		>
+			<polyline points='15 18 9 12 15 6' />
+		</svg>
+	);
+}
+
+/** Printer — the "Drukuj raport" button on the hive detail page. */
+export function PrinterIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			aria-hidden='true'
+			className={className}
+		>
+			<polyline points='6 9 6 2 18 2 18 9' />
+			<path d='M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2' />
+			<rect
+				x='6'
+				y='14'
+				width='12'
+				height='8'
+				rx='1'
+			/>
+		</svg>
+	);
+}
+
 /** Envelope — the email-verification pages. */
 export function MailIcon({ className }: { className?: string }) {
 	return (

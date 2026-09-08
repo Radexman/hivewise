@@ -121,3 +121,67 @@ body {
 	outline-offset: 6px;
 	border-radius: 0.375rem;
 }
+
+/* Shown only when printing — the hive detail page's report header. */
+.print-header {
+	display: none;
+}
+
+/* Print layout for the hive detail report (`/hive/[hiveId]`).
+   `@theme inline` maps every colour utility to `var(--<token>)`, so redefining
+   the base tokens here repaints the whole page for paper — dark surfaces to
+   white, low-alpha hairlines to solid grey — without touching a single
+   component. The honey line keeps a real (darker) amber so it stays legible. */
+@media print {
+	:root {
+		--background: #ffffff;
+		--surface: #ffffff;
+		--surface-2: #f9fafb;
+		--surface-3: #f3f4f6;
+		--foreground: #111827;
+		--muted: #4b5563;
+		--subtle: #9ca3af;
+		--accent: #047857;
+		--accent-warm: #d97706;
+		--danger: #b91c1c;
+		--border: #e5e7eb;
+		--border-2: #d1d5db;
+		--border-3: #9ca3af;
+	}
+
+	html,
+	body {
+		height: auto !important;
+		overflow: visible !important;
+		background: #ffffff !important;
+		color: #111827 !important;
+	}
+
+	/* Navigation chrome and the topbar (with its print button) never print. */
+	aside,
+	header,
+	nav,
+	.chart-limit-notice,
+	.history-limit-banner,
+	.no-print {
+		display: none !important;
+	}
+
+	/* The scroll container must not clip the report to one viewport. */
+	main {
+		display: block !important;
+		height: auto !important;
+		overflow: visible !important;
+	}
+
+	.print-header {
+		display: block !important;
+	}
+
+	/* Keep the chart and each history row from being split across a page break. */
+	.chart-wrapper,
+	.history-row,
+	.stat-card {
+		break-inside: avoid;
+	}
+}

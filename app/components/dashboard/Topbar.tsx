@@ -19,7 +19,11 @@ const BUTTON_PRIMARY = 'border-transparent bg-accent font-semibold text-backgrou
 const ICON = 'h-4 w-4 shrink-0 fill-none stroke-current stroke-2 [stroke-linecap:round] lg:h-3.25 lg:w-3.25';
 
 interface TopbarShellProps {
-	title: string;
+	/**
+	 * A plain string gets the truncating title treatment; a node (e.g. the hive
+	 * detail page's back link) is rendered as given.
+	 */
+	title: string | React.ReactNode;
 	/** Rendered after a separator, and only from `sm` up. Empty means neither. */
 	subtitle?: string;
 	actions?: React.ReactNode;
@@ -44,7 +48,11 @@ export async function TopbarShell({ title, subtitle = '', actions }: TopbarShell
 		<header className='sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-b-border bg-surface px-4 py-2 lg:px-6 lg:py-3'>
 			{/* min-w-0 lets the name truncate instead of shoving the buttons off-screen. */}
 			<div className='flex min-w-0 items-center gap-2'>
-				<span className='truncate text-[14px] font-medium text-foreground lg:text-[13px]'>{title}</span>
+				{typeof title === 'string' ? (
+					<span className='truncate text-[14px] font-medium text-foreground lg:text-[13px]'>{title}</span>
+				) : (
+					title
+				)}
 				{/* The separator belongs to the subtitle, not to the bar — an apiary with
 				    no location set would otherwise render a dangling "·". */}
 				{subtitle && <span className='hidden shrink-0 text-[12px] text-muted sm:inline'>· {subtitle}</span>}
