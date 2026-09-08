@@ -13,6 +13,7 @@ import {
 import { useMemo } from 'react';
 import { Controller, useFormContext, type FieldPath } from 'react-hook-form';
 
+import { PrefillNote, usePrefilled } from './prefill';
 import type { FormValues } from './schema';
 
 type FieldName = FieldPath<FormValues>;
@@ -33,14 +34,19 @@ function useError(name: FieldName): string | undefined {
 export function TextField({ name, label, placeholder }: { name: FieldName; label: string; placeholder?: string }) {
 	const { register } = useFormContext<FormValues>();
 	const error = useError(name);
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Field.Root
 			data-field={name}
+			data-prefilled={prefilled || undefined}
 			invalid={!!error}
-			className='flex flex-col gap-1.5'
+			className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 		>
-			<Field.Label className={labelClass}>{label}</Field.Label>
+			<Field.Label className={labelClass}>
+				{label}
+				<PrefillNote name={name} />
+			</Field.Label>
 			<Field.Input
 				className={controlClass}
 				placeholder={placeholder}
@@ -64,14 +70,19 @@ export function TextareaField({
 }) {
 	const { register } = useFormContext<FormValues>();
 	const error = useError(name);
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Field.Root
 			data-field={name}
+			data-prefilled={prefilled || undefined}
 			invalid={!!error}
-			className='flex flex-col gap-1.5'
+			className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 		>
-			<Field.Label className={labelClass}>{label}</Field.Label>
+			<Field.Label className={labelClass}>
+				{label}
+				<PrefillNote name={name} />
+			</Field.Label>
 			<Field.Textarea
 				rows={rows}
 				className={`${controlClass} resize-y`}
@@ -100,6 +111,7 @@ export function NumberField({
 	onValueChange?: (value: number) => void;
 }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -108,10 +120,14 @@ export function NumberField({
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-1.5'
+					className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 				>
-					<Field.Label className={labelClass}>{label}</Field.Label>
+					<Field.Label className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</Field.Label>
 					<NumberInput.Root
 						min={min}
 						max={max}
@@ -159,6 +175,7 @@ export function SelectField({
 }) {
 	const { control } = useFormContext<FormValues>();
 	const collection = useMemo(() => createListCollection({ items: options }), [options]);
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -167,10 +184,14 @@ export function SelectField({
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-1.5'
+					className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 				>
-					<Field.Label className={labelClass}>{label}</Field.Label>
+					<Field.Label className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</Field.Label>
 					<Select.Root
 						collection={collection}
 						invalid={!!fieldState.error}
@@ -226,6 +247,7 @@ export function MultiSelectField({
 }) {
 	const { control } = useFormContext<FormValues>();
 	const collection = useMemo(() => createListCollection({ items: options, groupBy: (item) => item.group }), [options]);
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -237,10 +259,14 @@ export function MultiSelectField({
 
 				return (
 					<Field.Root
+						data-prefilled={prefilled || undefined}
 						invalid={!!fieldState.error}
-						className='flex flex-col gap-1.5'
+						className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 					>
-						<Field.Label className={labelClass}>{label}</Field.Label>
+						<Field.Label className={labelClass}>
+							{label}
+							<PrefillNote name={name} />
+						</Field.Label>
 						<Select.Root
 							multiple
 							collection={collection}
@@ -315,6 +341,7 @@ export function RadioField({
 	columns?: 1 | 2;
 }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -323,10 +350,14 @@ export function RadioField({
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-2'
+					className={`flex flex-col gap-2 ${prefilled ? 'opacity-70' : ''}`}
 				>
-					<Field.Label className={labelClass}>{label}</Field.Label>
+					<Field.Label className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</Field.Label>
 					<RadioGroup.Root
 						value={(field.value as string | undefined) ?? null}
 						onValueChange={(details) => field.onChange(details.value)}
@@ -362,6 +393,7 @@ const SWATCH_COLORS: Record<string, string> = {
 
 export function SwatchField({ name, label, options }: { name: FieldName; label: string; options: Option[] }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -370,10 +402,14 @@ export function SwatchField({ name, label, options }: { name: FieldName; label: 
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-2'
+					className={`flex flex-col gap-2 ${prefilled ? 'opacity-70' : ''}`}
 				>
-					<Field.Label className={labelClass}>{label}</Field.Label>
+					<Field.Label className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</Field.Label>
 					<RadioGroup.Root
 						value={(field.value as string | undefined) ?? null}
 						onValueChange={(details) => field.onChange(details.value)}
@@ -404,6 +440,7 @@ export function SwatchField({ name, label, options }: { name: FieldName; label: 
 
 export function CheckboxField({ name, label }: { name: FieldName; label: string }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -412,8 +449,9 @@ export function CheckboxField({ name, label }: { name: FieldName; label: string 
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-1.5'
+					className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 				>
 					<Checkbox.Root
 						checked={!!field.value}
@@ -424,7 +462,10 @@ export function CheckboxField({ name, label }: { name: FieldName; label: string 
 						<Checkbox.Control className='flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-surface text-background data-[state=checked]:border-accent data-[state=checked]:bg-accent'>
 							<Checkbox.Indicator>✓</Checkbox.Indicator>
 						</Checkbox.Control>
-						<Checkbox.Label className='text-sm font-medium text-foreground'>{label}</Checkbox.Label>
+						<Checkbox.Label className='text-sm font-medium text-foreground'>
+							{label}
+							<PrefillNote name={name} />
+						</Checkbox.Label>
 						<Checkbox.HiddenInput onBlur={field.onBlur} />
 					</Checkbox.Root>
 					<Field.ErrorText className={errorClass}>{fieldState.error?.message}</Field.ErrorText>
@@ -436,14 +477,21 @@ export function CheckboxField({ name, label }: { name: FieldName; label: string 
 
 export function CheckboxGroupField({ name, label, options }: { name: FieldName; label: string; options: Option[] }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
 			control={control}
 			name={name}
 			render={({ field, fieldState }) => (
-				<div className='flex flex-col gap-2'>
-					<span className={labelClass}>{label}</span>
+				<div
+					data-prefilled={prefilled || undefined}
+					className={`flex flex-col gap-2 ${prefilled ? 'opacity-70' : ''}`}
+				>
+					<span className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</span>
 					<Checkbox.Group
 						value={(field.value as unknown as string[]) ?? []}
 						onValueChange={field.onChange}
@@ -474,6 +522,7 @@ export function CheckboxGroupField({ name, label, options }: { name: FieldName; 
 
 export function RatingField({ name, label, count = 5 }: { name: FieldName; label: string; count?: number }) {
 	const { control } = useFormContext<FormValues>();
+	const prefilled = usePrefilled(name);
 
 	return (
 		<Controller
@@ -482,10 +531,14 @@ export function RatingField({ name, label, count = 5 }: { name: FieldName; label
 			render={({ field, fieldState }) => (
 				<Field.Root
 					data-field={name}
+					data-prefilled={prefilled || undefined}
 					invalid={!!fieldState.error}
-					className='flex flex-col gap-1.5'
+					className={`flex flex-col gap-1.5 ${prefilled ? 'opacity-70' : ''}`}
 				>
-					<Field.Label className={labelClass}>{label}</Field.Label>
+					<Field.Label className={labelClass}>
+						{label}
+						<PrefillNote name={name} />
+					</Field.Label>
 					<RatingGroup.Root
 						count={count}
 						value={(field.value as number) ?? 0}

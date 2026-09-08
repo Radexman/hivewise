@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { StrengthDots } from './StrengthDots';
 import { QUEEN_LABELS, type HiveStatus, type QueenStatus } from './status';
 
@@ -49,6 +51,8 @@ const BTN_GHOST =
 const BTN_PRIMARY = 'min-h-12 border-transparent bg-accent font-semibold text-background hover:bg-accent-hover';
 
 export interface HiveCardProps {
+	/** Prisma `Hive.id` — the target of the "Przegląd" link. */
+	hiveId: string;
 	/** The hive's own label, e.g. "Ul 1" — user data, rendered as written. */
 	label: string;
 	/** `null` when the hive has never been inspected. */
@@ -59,7 +63,7 @@ export interface HiveCardProps {
 	status: HiveStatus;
 }
 
-export function HiveCard({ label, queenStatus, strength, lastInspection, status }: HiveCardProps) {
+export function HiveCard({ hiveId, label, queenStatus, strength, lastInspection, status }: HiveCardProps) {
 	const uninspected = queenStatus === null;
 
 	return (
@@ -100,12 +104,12 @@ export function HiveCard({ label, queenStatus, strength, lastInspection, status 
 					>
 						Szczegóły
 					</button>
-					<button
-						type='button'
+					<Link
+						href={`/inspect/${hiveId}`}
 						className={`${BTN_BASE} ${BTN_PRIMARY}`}
 					>
 						Przegląd
-					</button>
+					</Link>
 				</div>
 			</div>
 		</article>

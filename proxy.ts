@@ -32,5 +32,5 @@ export const config = {
 	// sends signed-in users to `/dashboard` and everyone else to `/sign-in`, so
 	// it has to *render* for both. Listing it here would turn the anonymous
 	// branch into next-auth's redirect and the page would never run.
-	matcher: ['/dashboard/:path*', '/profile', '/inspection'],
+	matcher: ['/dashboard/:path*', '/profile', '/inspection', '/inspect/:path*'],
 };

@@ -1,16 +1,34 @@
-# Current Feature
+# Current Feature: Inspection Flow — Hive → Form → Database
 
 ## Status
 
-Not Started
+In Progress
 
 ## Goals
 
-<!-- Bullet points of what success looks like. Populated by /feature load. -->
+- "Przegląd" button on `HiveCard` becomes a `<Link>` to `/inspect/[hiveId]` (no `onClick`).
+- New route `app/(dashboard)/inspect/[hiveId]/page.tsx` — server component: auth guard (redirect `/login` when unauthenticated), ownership check via `apiary.userId`, `notFound()` for missing **or** unauthorized hive (don't leak existence). Loads hive + `currentInspection` for prefill.
+- 7-step client inspection form (`Kolonia`, `Matka`, `Czerw`, `Plastry`, `Zdrowie`, `Działania`, `Podsumowanie`) with `N / 7` progress indicator + thin top progress line, no step labels. "Dalej" saves step data to draft then advances; "Wstecz" goes back without clearing.
+- `InspectionDraft` type in `types/inspection-draft.ts` covering all 7 steps, matching the Prisma `Inspection` JSON column shapes so submit is a pass-through.
+- localStorage draft system, key scoped per `hiveId` (`hivewise:draft:${hiveId}`): save on every step advance, auto-discard drafts older than 24h, fail silently when localStorage is unavailable.
+- Draft resume banner when a valid draft exists on mount: "Wznów" restores draft and jumps to last completed step; "Zacznij od nowa" clears draft and resets to step 1 with prefill values.
+- Prefill from `hive.currentInspection` when present, draft taking priority over prefill; prefilled values visually marked "z poprzedniego przeglądu". `notes` never prefilled.
+- Step 7 shows a full summary of all entered data + notes field + submit button.
+- `submitInspectionAction(hiveId, draft)` server action: re-check auth + ownership; validate required sections (`queen`, `colony`, `brood`, `comb`); validate every comb frame sums to exactly 10 (error names the offending frame); derive `honeyKg` + `honeySufficiency`; create `Inspection` and update `Hive.currentInspectionId` in one `$transaction`; `redirect('/dashboard?inspected=' + hiveId)`. Errors return `{ error }` and stay on step 7.
+- Draft cleared client-side after the successful redirect.
+- `/dashboard` reads the `inspected` query param and shows success feedback (toast / inline confirmation) for that hive.
 
 ## Notes
 
-<!-- Additional context, constraints, or details from the spec. -->
+- **Read `node_modules/next/dist/docs/` before writing the route or the server action.** This Next version has breaking changes vs. training data. In particular the spec's `params: { hiveId: string }` is likely wrong — `params` may be a `Promise` here; verify. Heed deprecation notices.
+- **Path drift in the spec:** it uses `src/`-prefixed paths, a root `components/` dir, and imports `@/lib/auth` / `@/lib/prisma`. This repo has **no `src/`** — components live under `app/components/`, Prisma client is `app/lib/prisma.ts`, auth is `auth.ts` at repo root. Match existing import conventions, not the spec's.
+- **`colony` shape conflict:** this spec puts `honey_stores` / `honey_kg` / `frames_covered` on `draft.colony`, but the Dashboard Spec 2 History note records that `colony` carries **no** `honey_stores` / `honey_kg` (those are the derived scalar columns `honeyKg` / `honeySufficiency`) and that `frames_covered` validates 0–20, not 0–10. Reconcile against `types/inspection.ts` and the form schema (the authority on what reaches each column) before implementing — don't copy the spec's interface verbatim.
+- **Out of scope (do not build):** PDF generation (`PdfGenerationJob` flow), voice input for the comb section (`useVoiceFrame`), per-hive inspection history view, editing a submitted inspection, deleting an inspection.
+- Spec imports `loginLimiter` from `@/lib/ratelimit` but never actually calls it in submit — no rate limiting is wired on this action per the spec.
+- `combCondition: 'GOOD'` is hardcoded for now (derive from comb data in a follow-up spec); `combSchemaVersion: 2`.
+- `Hive.currentInspectionId` is `onDelete: SetNull` and forms a two-table FK cycle with `Inspection.hive` — already handled by the schema.
+- After any `schema.prisma` / `prisma generate` change, restart the dev server (recurring `@theme` / `'use server'` / Turbopack staleness lesson from History). Same for newly added server-action modules.
+- `Dodaj ul` / `Nowy przegląd` on the dashboard remain inert; `Szczegóły` stays inert. Only the `HiveCard` "Przegląd" button is wired here.
 
 ## History
 
