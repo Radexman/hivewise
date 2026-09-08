@@ -289,3 +289,36 @@ export function WarningIcon({ className }: { className?: string }) {
 		</svg>
 	);
 }
+
+/** Tray with a downward arrow — the "Pobierz PDF" button on the hive detail page. */
+export function DownloadIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			aria-hidden='true'
+			className={className}
+		>
+			<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+			<polyline points='7 10 12 15 17 10' />
+			<line
+				x1='12'
+				y1='15'
+				x2='12'
+				y2='3'
+			/>
+		</svg>
+	);
+}
+
+/** Broken ring — paired with `animate-spin` for in-flight actions. */
+export function LoaderIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox='0 0 24 24'
+			aria-hidden='true'
+			className={className}
+		>
+			<path d='M21 12a9 9 0 1 1-6.219-8.56' />
+		</svg>
+	);
+}

@@ -8,6 +8,7 @@ import { StrengthDots } from '@/app/components/dashboard/StrengthDots';
 import { TopbarShell } from '@/app/components/dashboard/Topbar';
 import { HistoryList } from '@/app/components/hive/HistoryList';
 import { HoneyChart } from '@/app/components/hive/HoneyChart';
+import { PdfButton } from '@/app/components/hive/PdfButton';
 import { PrintButton } from '@/app/components/hive/PrintButton';
 import { StatCard } from '@/app/components/hive/StatCard';
 import { StatusPill } from '@/app/components/hive/StatusPill';
@@ -109,7 +110,15 @@ export default async function HiveDetailPage({ params }: { params: Promise<{ hiv
 						<span className='truncate'>{hive.apiary.name}</span>
 					</Link>
 				}
-				actions={<PrintButton />}
+				actions={
+					<div className='flex items-start gap-2'>
+						<PrintButton />
+						<PdfButton
+							inspectionId={current?.id ?? null}
+							disabled={!current}
+						/>
+					</div>
+				}
 			/>
 
 			<div className='flex-1 p-4 lg:p-6'>
