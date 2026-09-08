@@ -17,6 +17,7 @@ import {
 
 import { AlertCard, type AlertCardProps } from '../../components/dashboard/AlertCard';
 import { HiveCard, type HiveCardProps } from '../../components/dashboard/HiveCard';
+import { InspectionSavedToast } from '../../components/dashboard/InspectionSavedToast';
 import { Topbar } from '../../components/dashboard/Topbar';
 import { HoneycombBackdrop } from '../../components/ui/HoneycombBackdrop';
 
@@ -29,7 +30,8 @@ const SECTION_LABEL = 'mb-2.5 text-[11px] font-semibold tracking-[0.09em] text-m
  * derives against the current clock, so the static prerender Spec 1 shipped is
  * gone by design rather than by regression.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ inspected?: string }> }) {
+	const { inspected } = await searchParams;
 	const session = await auth();
 
 	// Proxy already turned away anonymous requests before this ran; this is the
@@ -81,8 +83,8 @@ export default async function DashboardPage() {
 		queenStatus: deriveQueenStatus(hive),
 	}));
 
-	const hives: (HiveCardProps & { id: string })[] = hivesWithStatus.map(({ hive, status, queenStatus }) => ({
-		id: hive.id,
+	const hives: HiveCardProps[] = hivesWithStatus.map(({ hive, status, queenStatus }) => ({
+		hiveId: hive.id,
 		label: hive.label,
 		queenStatus,
 		strength: deriveStrength(hive),
@@ -111,12 +113,23 @@ export default async function DashboardPage() {
 	const summary = buildSummaryLine(apiary.hives.length, latestInspectionDate(apiary.hives), alerts.length);
 	const hiveTypeSummary = buildHiveTypeSummary(apiary.hives.map((hive) => hive.hiveType));
 
+	// `?inspected=` is set by the submit redirect; ignore a value that is not one
+	// of this user's hives.
+	const inspectedHive = inspected ? (apiary.hives.find((hive) => hive.id === inspected) ?? null) : null;
+
 	return (
 		<>
 			<Topbar
 				apiaryName={apiary.name}
 				location={apiary.location ?? ''}
 			/>
+
+			{inspectedHive && (
+				<InspectionSavedToast
+					hiveId={inspectedHive.id}
+					hiveLabel={inspectedHive.label}
+				/>
+			)}
 
 			<div className='flex-1 p-4 lg:p-6'>
 				<div className='mb-5 lg:mb-6'>
@@ -151,9 +164,9 @@ export default async function DashboardPage() {
 					/* Two up on phones: enough hives per screen to avoid hunting, while each
 					   card stays wide enough for a full-width "Przegląd". */
 					<div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-2'>
-						{hives.map(({ id, ...hive }) => (
+						{hives.map((hive) => (
 							<HiveCard
-								key={id}
+								key={hive.hiveId}
 								{...hive}
 							/>
 						))}

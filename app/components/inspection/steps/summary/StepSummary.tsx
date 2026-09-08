@@ -17,6 +17,14 @@ export type WeatherState = 'idle' | 'loading' | 'ready' | 'error';
 
 type SummaryProps = {
 	hiveNumber: string | number;
+	/** Shown as the "Ul" metadata value when set, in place of the number. */
+	hiveLabel?: string;
+	/**
+	 * `'pdf'` (default) is the standalone wizard: PDF-oriented copy, weather card.
+	 * `'save'` is the per-hive flow that writes to the database — no PDF or
+	 * weather, since neither is stored.
+	 */
+	mode?: 'pdf' | 'save';
 	inspectionNumber: string | number;
 	weather: InspectionWeather | null;
 	weatherState: WeatherState;
@@ -91,6 +99,8 @@ function Empty({ text }: { text: string }) {
 
 export function StepSummary({
 	hiveNumber,
+	hiveLabel,
+	mode = 'pdf',
 	inspectionNumber,
 	weather,
 	weatherState,
@@ -101,6 +111,7 @@ export function StepSummary({
 	const v = useWatch({ control }) as FormValues;
 
 	const meta = buildMeta(hiveNumber, inspectionNumber);
+	const isSave = mode === 'save';
 
 	// Recomputed here purely to preview what the service will derive from the frames.
 	const comb = deriveComb({
@@ -117,7 +128,9 @@ export function StepSummary({
 	return (
 		<div className='flex flex-col gap-6'>
 			<p className='text-sm text-subtle'>
-				Sprawdź dane przed wygenerowaniem raportu PDF. Dotknij sekcji, aby ją poprawić.
+				{isSave
+					? 'Sprawdź dane przed zapisaniem przeglądu. Dotknij sekcji, aby ją poprawić.'
+					: 'Sprawdź dane przed wygenerowaniem raportu PDF. Dotknij sekcji, aby ją poprawić.'}
 			</p>
 
 			<section className='flex flex-col gap-3'>
@@ -128,7 +141,7 @@ export function StepSummary({
 				<div className='grid grid-cols-2 gap-3'>
 					<MetaCard
 						label='Ul'
-						value={meta.hive_number}
+						value={hiveLabel ?? meta.hive_number}
 					/>
 					<MetaCard
 						label='Data'
@@ -137,45 +150,47 @@ export function StepSummary({
 				</div>
 			</section>
 
-			<section className='flex flex-col gap-3'>
-				<div className='flex items-center justify-between'>
-					<h3 className='text-sm font-semibold text-muted'>Pogoda (auto z API)</h3>
-					<button
-						type='button'
-						onClick={onRefreshWeather}
-						disabled={weatherState === 'loading'}
-						className='rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface-3 disabled:opacity-50'
-					>
-						{weatherState === 'loading' ? 'Pobieranie…' : '↻ Odśwież'}
-					</button>
-				</div>
-				{weatherState === 'loading' && <Empty text='Pobieranie danych pogodowych…' />}
-				{weatherState !== 'loading' && weather && (
-					<div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
-						<WeatherCard
-							value={`${weather.temp}°`}
-							label='Temperatura'
-						/>
-						<WeatherCard
-							value={`${weather.humidity}%`}
-							label='Wilgotność'
-						/>
-						<WeatherCard
-							value={`${weather.wind}`}
-							label='Wiatr km/h'
-						/>
-						<WeatherCard
-							value={`${weather.cloud_cover}%`}
-							label='Zachmurzenie'
-						/>
+			{!isSave && (
+				<section className='flex flex-col gap-3'>
+					<div className='flex items-center justify-between'>
+						<h3 className='text-sm font-semibold text-muted'>Pogoda (auto z API)</h3>
+						<button
+							type='button'
+							onClick={onRefreshWeather}
+							disabled={weatherState === 'loading'}
+							className='rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface-3 disabled:opacity-50'
+						>
+							{weatherState === 'loading' ? 'Pobieranie…' : '↻ Odśwież'}
+						</button>
 					</div>
-				)}
-				{weatherState !== 'loading' && !weather && (
-					<div className='rounded-lg border border-border bg-surface-2 p-4 text-sm text-subtle'>
-						Pogoda niedostępna — raport zostanie utworzony bez niej. Spróbuj odświeżyć przy lepszym zasięgu.
-					</div>
-				)}
-			</section>
+					{weatherState === 'loading' && <Empty text='Pobieranie danych pogodowych…' />}
+					{weatherState !== 'loading' && weather && (
+						<div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
+							<WeatherCard
+								value={`${weather.temp}°`}
+								label='Temperatura'
+							/>
+							<WeatherCard
+								value={`${weather.humidity}%`}
+								label='Wilgotność'
+							/>
+							<WeatherCard
+								value={`${weather.wind}`}
+								label='Wiatr km/h'
+							/>
+							<WeatherCard
+								value={`${weather.cloud_cover}%`}
+								label='Zachmurzenie'
+							/>
+						</div>
+					)}
+					{weatherState !== 'loading' && !weather && (
+						<div className='rounded-lg border border-border bg-surface-2 p-4 text-sm text-subtle'>
+							Pogoda niedostępna — raport zostanie utworzony bez niej. Spróbuj odświeżyć przy lepszym zasięgu.
+						</div>
+					)}
+				</section>
+			)}
 
 			<section className='flex flex-col gap-3'>
 				<Section
